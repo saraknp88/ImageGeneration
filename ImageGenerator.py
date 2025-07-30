@@ -77,6 +77,33 @@ MAX_DAILY_GENERATIONS = 20  # Prevent abuse
 MAX_PROMPT_LENGTH = 500
 BLOCKED_WORDS = ['nsfw', 'explicit', 'nude', 'violence', 'gore', 'sexual']
 
+def test_api_key(api_key):
+    """Test if the API key works with a simple request"""
+    try:
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Simple test request to check if API key works
+        response = requests.get(
+            'https://api.openai.com/v1/models',
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return True, "API key is valid"
+        elif response.status_code == 401:
+            return False, "Invalid API key"
+        elif response.status_code == 429:
+            return False, "Rate limited (but key seems valid)"
+        else:
+            return False, f"API test failed with status {response.status_code}"
+            
+    except Exception as e:
+        return False, f"API test error: {str(e)}"
+
 def get_api_key_safely():
     """
     Securely retrieve API key from environment/secrets
@@ -298,9 +325,9 @@ def main():
         <strong>API Key Not Found!</strong><br><br>
         
         <strong>For local development:</strong><br>
-        1. Create a <code>.env</code> file in your project root<br>
-        2. Add: <code>OPENAI_API_KEY=your_key_here</code><br>
-        3. Make sure <code>.env</code> is in your <code>.gitignore</code><br><br>
+        1. Create a <code>.streamlit/secrets.toml</code> file in your project root<br>
+        2. Add: <code>OPENAI_API_KEY = "your_key_here"</code><br>
+        3. Make sure <code>.streamlit/secrets.toml</code> is in your <code>.gitignore</code><br><br>
         
         <strong>For Streamlit Cloud deployment:</strong><br>
         1. Go to your app settings<br>
@@ -312,6 +339,23 @@ def main():
         """, unsafe_allow_html=True)
         
         display_security_info()
+        st.stop()
+    
+    # Test API key
+    with st.spinner("🔑 Testing API key..."):
+        key_valid, key_message = test_api_key(api_key)
+        
+    if key_valid:
+        st.success(f"✅ {key_message}")
+    else:
+        st.error(f"❌ API Key Issue: {key_message}")
+        st.info("""
+        **Common API key issues:**
+        - Make sure your API key starts with 'sk-'
+        - Check that you have billing set up in your OpenAI account
+        - Verify you have usage credits remaining
+        - Ensure your API key has the correct permissions
+        """)
         st.stop()
     
     # Display current usage
