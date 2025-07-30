@@ -148,7 +148,7 @@ def check_rate_limits():
 
 def make_secure_api_request(prompt):
     """
-    Make secure API request to OpenAI
+    Make secure API request to OpenAI with detailed debugging
     Returns (success, result_or_error_message)
     """
     try:
@@ -164,11 +164,11 @@ def make_secure_api_request(prompt):
             'User-Agent': 'StreamlitImageGenerator/1.0'
         }
         
-        # Prepare request data
+        # DALL-E 3 can only generate 1 image at a time
         request_data = {
             "model": "dall-e-3",
             "prompt": prompt,
-            "n": 2,  # Generate 2 images
+            "n": 1,  # DALL-E 3 only supports n=1
             "size": "1024x1024",
             "quality": "standard",
             "response_format": "url"
@@ -177,42 +177,72 @@ def make_secure_api_request(prompt):
         # ✅ Safe logging (no sensitive data)
         logger.info(f"Making API request for prompt length: {len(prompt)}")
         
-        # Make request with timeout
-        response = requests.post(
-            'https://api.openai.com/v1/images/generations',
-            headers=headers,
-            json=request_data,
-            timeout=60  # Prevent hanging requests
-        )
+        # Make TWO separate requests for 2 images (DALL-E 3 limitation)
+        image_urls = []
         
-        # Handle response
-        if response.status_code == 200:
-            result = response.json()
-            image_urls = [img['url'] for img in result['data']]
+        for i in range(2):
+            st.write(f"🎨 Generating image {i+1}/2...")
+            
+            # Make request with timeout
+            response = requests.post(
+                'https://api.openai.com/v1/images/generations',
+                headers=headers,
+                json=request_data,
+                timeout=60
+            )
+            
+            # Debug information (safe to show)
+            st.write(f"API Response Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'data' in result and len(result['data']) > 0:
+                    image_urls.append(result['data'][0]['url'])
+                    st.write(f"✅ Image {i+1} generated successfully!")
+                else:
+                    return False, f"No image data returned for image {i+1}"
+            
+            elif response.status_code == 429:
+                return False, "Rate limit exceeded. Please wait before trying again."
+            
+            elif response.status_code == 400:
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                    
+                    # Show detailed error for debugging
+                    st.write(f"API Error Details: {error_message}")
+                    
+                    if 'content_policy_violation' in error_message.lower():
+                        return False, "Content policy violation. Please modify your prompt."
+                    elif 'billing' in error_message.lower():
+                        return False, "Billing issue. Please check your OpenAI account billing."
+                    elif 'quota' in error_message.lower():
+                        return False, "Usage quota exceeded. Please check your OpenAI usage limits."
+                    else:
+                        return False, f"API Error: {error_message}"
+                except:
+                    return False, f"Bad request (400). Response: {response.text[:200]}"
+            
+            elif response.status_code == 401:
+                return False, "Authentication failed. Please check your API key."
+            
+            elif response.status_code == 403:
+                return False, "Access denied. Please check your API key permissions."
+            
+            else:
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                    return False, f"API Error ({response.status_code}): {error_message}"
+                except:
+                    return False, f"API request failed with status {response.status_code}: {response.text[:200]}"
+        
+        if len(image_urls) > 0:
             logger.info(f"Successfully generated {len(image_urls)} images")
             return True, image_urls
-        
-        elif response.status_code == 429:
-            logger.warning("Rate limit exceeded")
-            return False, "Rate limit exceeded. Please wait before trying again."
-        
-        elif response.status_code == 400:
-            logger.warning("Bad request to OpenAI API")
-            try:
-                error_data = response.json()
-                if 'content_policy_violation' in str(error_data):
-                    return False, "Content policy violation. Please modify your prompt."
-                return False, "Invalid request. Please check your prompt."
-            except:
-                return False, "Invalid request format."
-        
-        elif response.status_code == 401:
-            logger.error("Authentication failed")
-            return False, "API key authentication failed. Please check configuration."
-        
         else:
-            logger.error(f"API request failed with status {response.status_code}")
-            return False, f"API request failed. Please try again later."
+            return False, "No images were generated successfully"
             
     except requests.exceptions.Timeout:
         logger.error("Request timeout")
@@ -223,9 +253,9 @@ def make_secure_api_request(prompt):
         return False, "Network connection error. Please check your internet."
     
     except Exception as e:
-        # ✅ Log error but don't expose sensitive details to user
+        # Show more details for debugging
         logger.error(f"Unexpected error in API request: {str(e)}")
-        return False, "An unexpected error occurred. Please try again."
+        return False, f"Unexpected error: {str(e)}"
 
 def display_security_info():
     """Display security and privacy information"""
