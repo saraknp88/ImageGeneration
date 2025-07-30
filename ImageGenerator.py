@@ -227,6 +227,24 @@ def make_secure_api_request(prompt):
         logger.error(f"Unexpected error in API request: {str(e)}")
         return False, "An unexpected error occurred. Please try again."
 
+def display_security_info():
+    """Display security and privacy information"""
+    with st.expander("🔒 Security & Privacy Information"):
+        st.markdown("""
+        **How we protect your data:**
+        - ✅ API keys stored securely in environment variables
+        - ✅ No sensitive data logged or stored
+        - ✅ Content filtering for inappropriate prompts
+        - ✅ Rate limiting to prevent abuse
+        - ✅ Secure HTTPS connections only
+        - ✅ Generated images are not stored on our servers
+        
+        **Usage limits:**
+        - Maximum {MAX_DAILY_GENERATIONS} generations per day
+        - Maximum {MAX_PROMPT_LENGTH} characters per prompt
+        - Content policy compliance required
+        """.format(MAX_DAILY_GENERATIONS=MAX_DAILY_GENERATIONS, MAX_PROMPT_LENGTH=MAX_PROMPT_LENGTH))
+
 def main():
     st.markdown("""
     <div style='text-align: center; padding: 2rem 0;'>
